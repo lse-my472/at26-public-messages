@@ -57,9 +57,11 @@ def github(path, raw=False):
     request.add_header("Accept", "application/vnd.github+json")
     with urllib.request.urlopen(request) as response:
         body = json.loads(response.read())
-    # A file arrives as base64 inside the JSON. Do not ask for the raw media type instead:
-    # that returns the bytes decoded as text, which destroys an encrypted file. Tested
-    # 2026-10-14: a 36-byte message came back as 54 bytes.
+    # A file arrives as base64 inside the JSON. Read files through /git/blobs/{sha}, never
+    # through /contents/{path}: the contents endpoint re-encodes the body as text, which
+    # destroys an encrypted file, and asking for the raw media type does the same. Tested
+    # 2026-10-14: a 36-byte message came back as 58 bytes from contents, 36 from blobs,
+    # while contents still reported "size": 36.
     return base64.b64decode(body["content"]) if raw else body
 
 
@@ -103,20 +105,20 @@ for name in repos:
     if sent >= LIMIT:
         continue
 
-    # List the files at the top level of the repository
+    # List the files at the top level of the repository, keeping the hash of each one
     try:
-        files = [f["name"] for f in github(f"/repos/{ORG}/{name}/contents/")]
+        shas = {f["name"]: f["sha"] for f in github(f"/repos/{ORG}/{name}/contents/")}
     except Exception:
         skipped = skipped + 1          # empty repository, or no access
         continue
     # The public key and the message must both be there, or there is nothing to answer
-    pems = sorted(f for f in files if re.fullmatch(r"\d{5}\.pem", f))
-    if MESSAGE_FILE not in files or not pems:
+    pems = sorted(f for f in shas if re.fullmatch(r"\d{5}\.pem", f))
+    if MESSAGE_FILE not in shas or not pems:
         continue
 
     # Fetch the message. Its hash names the reply, so each message is answered once
     try:
-        message = github(f"/repos/{ORG}/{name}/contents/{MESSAGE_FILE}", raw=True)
+        message = github(f"/repos/{ORG}/{name}/git/blobs/{shas[MESSAGE_FILE]}", raw=True)
     except Exception:
         skipped = skipped + 1          # could not fetch the message this run
         continue
@@ -128,7 +130,7 @@ for name in repos:
     # Make the shared secret from the instructor's private key and the student's public key
     try:
         student_public = serialization.load_pem_public_key(
-            github(f"/repos/{ORG}/{name}/contents/{pems[0]}", raw=True))
+            github(f"/repos/{ORG}/{name}/git/blobs/{shas[pems[0]]}", raw=True))
         shared_secret = instructor.exchange(student_public)
     except Exception:
         skipped = skipped + 1          # not a valid X25519 public key
