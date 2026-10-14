@@ -23,6 +23,7 @@
 #   E2E_PRIVATE_KEY  the instructor's X25519 private key, as hex
 #   READ_TOKEN       fine-grained token, owner lse-my472, Contents: Read on all repositories
 
+import base64
 import hashlib
 import hmac
 import json
@@ -53,10 +54,13 @@ def github(path, raw=False):
     # One request to the GitHub API, using the read-only token. Five call sites below.
     request = urllib.request.Request("https://api.github.com" + path)
     request.add_header("Authorization", "Bearer " + os.environ["READ_TOKEN"])
-    request.add_header("Accept", "application/vnd.github.raw" if raw else "application/vnd.github+json")
+    request.add_header("Accept", "application/vnd.github+json")
     with urllib.request.urlopen(request) as response:
-        body = response.read()
-    return body if raw else json.loads(body)
+        body = json.loads(response.read())
+    # A file arrives as base64 inside the JSON. Do not ask for the raw media type instead:
+    # that returns the bytes decoded as text, which destroys an encrypted file. Tested
+    # 2026-10-14: a 36-byte message came back as 54 bytes.
+    return base64.b64decode(body["content"]) if raw else body
 
 
 # Load the instructor's private key from the Actions secret
