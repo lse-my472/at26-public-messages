@@ -4,7 +4,7 @@ This is a repository of encrypted messages from the instructor to students in MY
 
 More specifically:
 
-- Each `.enc` file is an encrypted reply to a message that a student sent to the instructor. 
+- Each `.enc` file in the `replies` folder is an encrypted reply to a message that a student sent to the instructor. 
 - Each of these files is named after a hash of the message it answers, so the name does not say who it is for. 
 - Only the student who sent the message can decrypt the reply.
 - `instructor_public_key.pem` is the instructor's public key, which is safe to publish.

@@ -4,7 +4,8 @@
 # encrypted message (to_instructor.enc). For each message it has not answered yet, it:
 #   1. makes the shared secret from the instructor's private key and the student's public key
 #   2. decrypts the message, which should be two whole numbers, like "37 + 105"
-#   3. writes an encrypted reply with the sum and a random code to this repository
+#   3. writes an encrypted reply with the sum and a random code to the replies folder of
+#      this repository
 #
 # The reply is named after the first 16 hex characters of the SHA-256 hash of the student's
 # to_instructor.enc, plus ".enc". So nothing in this public repository says who a reply is
@@ -41,6 +42,7 @@ PREFIX = "at26-seminar03-"
 SKIP = {"at26-seminar03-template"}
 MESSAGE_FILE = "to_instructor.enc"
 COUNTS_FILE = "message_counts.json"
+REPLIES_DIR = "replies"
 LIMIT = 5
 WORDS = ["amber", "anchor", "badger", "cedar", "comet", "copper", "falcon", "harbour",
          "heron", "lantern", "maple", "marble", "meadow", "otter", "pepper", "quartz",
@@ -65,6 +67,9 @@ instructor = x25519.X25519PrivateKey.from_private_bytes(
 counts_key = hashlib.sha256(
     b"my472-counts" + bytes.fromhex(os.environ["E2E_PRIVATE_KEY"])).digest()
 
+# The replies all go in one folder, so the root of this repository stays readable
+os.makedirs(REPLIES_DIR, exist_ok=True)
+
 # How many messages each repository has sent, written by earlier runs
 counts = {}
 if os.path.exists(COUNTS_FILE):
@@ -88,7 +93,7 @@ skipped = 0
 
 # Each student repository in turn: read the key and the message, then write a reply
 for name in repos:
-    # Two messages each, counted across runs under an id nobody else can work out
+    # Five messages each, counted across runs under an id nobody else can work out
     student_id = hmac.new(counts_key, name.encode("utf-8"), hashlib.sha256).hexdigest()[0:16]
     sent = counts.get(student_id, 0)
     if sent >= LIMIT:
@@ -112,7 +117,8 @@ for name in repos:
         skipped = skipped + 1          # could not fetch the message this run
         continue
     reply_name = hashlib.sha256(message).hexdigest()[0:16] + ".enc"
-    if os.path.exists(reply_name):
+    reply_path = os.path.join(REPLIES_DIR, reply_name)
+    if os.path.exists(reply_path):
         continue                       # already answered
 
     # Make the shared secret from the instructor's private key and the student's public key
@@ -157,12 +163,12 @@ for name in repos:
 
     # Say so on the last reply they are allowed
     if sent + 1 >= LIMIT:
-        text = text + (" You have sent two messages. You will not receive a reply if you "
+        text = text + (" You have sent five messages. You will not receive a reply if you "
                        "send any more.")
 
     # Encrypt the reply and write it into this repository
     iv = os.urandom(12)
-    with open(reply_name, mode="wb") as f:
+    with open(reply_path, mode="wb") as f:
         f.write(iv + AESGCM(shared_secret).encrypt(iv, text.encode("utf-8"), None))
     counts[student_id] = sent + 1
     replied = replied + 1
