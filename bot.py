@@ -116,7 +116,8 @@ for name in repos:
     if MESSAGE_FILE not in shas or not pems:
         continue
 
-    # Fetch the message. Its hash names the reply, so each message is answered once
+    # Fetch the message by blob hash, never from /contents/ (see github() above). Its hash
+    # names the reply, so each message is answered once
     try:
         message = github(f"/repos/{ORG}/{name}/git/blobs/{shas[MESSAGE_FILE]}", raw=True)
     except Exception:
